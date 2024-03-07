@@ -1,0 +1,171 @@
+# Set working directory.
+setwd("D:/test/xuewei"
+#Load the  packages.
+rm(list = ls())
+library(plyr)
+library(rio)
+library(openxlsx)
+# Read file
+ff<-read.csv("Prescription of Acupoint Combinations.CSV",header=T)
+library(dplyr)
+# Remove duplicate rows based on column data.
+gg<-distinct(ff)
+write.csv(gg,"xuewei.csv")
+
+
+# Perform association rule analysis.
+#Load the  packages.
+library(arules)    
+library(arulesViz) 
+library(RColorBrewer)  
+library(shinythemes)
+library(showtext) 
+showtext_auto(enable=T) 
+library(sysfonts)
+# Convert the data into a basket format dataset required for association rule analysis.
+transdata0 <- read.transactions("xuewei.csv", format =c("basket"),                                 
+                                sep = ",", cols = 1, header = TRUE, rm.duplicates = TRUE)
+inspect(transdata0[1:20])
+summary(transdata0)
+#Counting the high-frequency acupoint names;
+herbfreq <- sort(itemFrequency(transdata0, "absolute"), decreasing = TRUE)
+#Save the frequency table.
+write.csv(herbfreq, file = "Frequency.csv") 
+#Visualizing
+par(family = "STKaiti",cex = 0.7)
+#Create a graph of the top 21 most frequently occurring items.
+itemFrequencyPlot(transdata0,top=21, type = "absolute",col = "lightblue",xlab = "Acupoints",
+                  ylab = "Frequency",main = "The 21 most frequently occurring acupoints")
+
+#Build an association rule model and set parameters.
+myrules <- apriori(transdata0, parameter = list( support = 0.1, confidence = 0.9, 
+                                                 target = "rules", 
+                                                 minlen = 2 
+                                                 ))
+summary(myrules)
+
+# View the association rules.
+##Viewing the top 10 association rules
+inspect(myrules[1:10])
+## Sorting the obtained association rules based on confidence level or as needed, support level, or lift value
+myrules.a <- sort(myrules, by = "confidence", decreasing = T ) 
+myrules.a <- inspect(myrules.a)
+#Save the association rule file.
+write.csv(myrules.a, "association rules.csv")
+
+
+#Create a matrix data table.
+rm(list = ls())
+library(tidyverse)
+library(reshape2)
+library(openxlsx)
+library(rio)
+h = import("xuewei.csv",format = '\t')#Convert the self-created CSV file to an xlsx file.
+export(h,file = "Rdata.xlsx")
+Rdata<-read.xlsx("Rdata.xlsx")
+#First, manually change the content in the top-left corner of the Rdata.xlsx spreadsheet to "rowid".
+#Convert it to long data (transactional data).
+longdata <- melt(Rdata, id.vars = "rowid", value.name = "herbs") %>% 
+  select(-2) %>% arrange(rowid) %>%  
+  na.omit() %>% distinct() 
+longdata <- mutate(longdata, existing = 1)
+longdata <- longdata %>% pivot_wider(names_from = herbs,
+                                     values_from = existing,
+                                     values_fill = 0)
+tibble(longdata)
+#Save the matrix data table
+write.xlsx(longdata, "matrix data.xlsx")
+
+# Create an adjacency table.
+rm(list = ls())
+library(readxl)
+demo2 <- read_excel("matrix data.xlsx", 
+                    sheet = 1)   
+demo2 <- demo2  %>% select(-1)
+n <- 44# Fill in the number of acupuncture points, which is 44 in this study.
+k <- 2#The study focuses on pairwise combinations, so fill in 2 here.
+num_comb <- choose(n, k)
+num_comb
+cooc <- function(x,y){
+  a <- sum((demo2[, x] + demo2[, y]) ==2 )
+  a        
+}
+res <- data.frame(row1 = character(), row2 = character(),count = numeric())
+for (i in 1:43) {
+  for (j in (i + 1):44) {
+    res_row = data.frame(row1 = colnames(demo2)[i], row2 = colnames(demo2)[j],
+                         count = cooc(i,j))
+    res = rbind(res, res_row)
+  }
+}
+nrow(res)
+#Filter the combination frequency (co-occurrence frequency) as needed. Generally, a co-occurrence frequency of 1 is not meaningful.
+res <- res %>% filter(count >=10)#Set it to the desired co-occurrence frequency, which is 10 in this study.
+#Save the data, the adjacency table!!
+write.xlsx(res, "adjacency table (co-occurrence frequency of 10 or more).xlsx")
+
+# Create a chord diagram.
+data = readxl::read_excel("adjacency table (co-occurrence frequency of 10 or more).xlsx", 
+                            sheet = 1)   
+write.table(data,              
+              "adjacency table (co-occurrence frequency of 10 or more).txt",     
+              sep = ";",              
+              col.names = T,           
+              row.names = F,            
+              quote=F                   
+  )
+#Visualizing
+library(circlize)
+chordDiagram(
+    x = data,
+    grid.col=NULL, 
+    directional = 1,                              
+    direction.type = c("arrows", "diffHeight"),    
+    diffHeight = -0.05,                            
+    annotationTrack = c("name", "grid", "axis"), 
+    annotationTrackHeight = c(0.08, 0.08),         
+    link.arr.type = "big.arrow",                   
+    link.sort = TRUE,                              
+    link.largest.ontop = TRUE,                   
+    transparency = 0.25                          
+  )
+
+
+#Cluster analysis.
+rm(list = ls())
+longdata <-read.xlsx("matrix data.xlsx")
+prescript1 <- as.data.frame(t(longdata[,-1]))
+rowname <- rownames(prescript1)
+prescript1 <- as.data.frame(lapply(prescript1,as.numeric))
+rownames(prescript1) <- rowname
+prescript1 <- prescript1[rowSums(prescript1[])>=10,]#According to the settings of this study, only extract the acupuncture points with a frequency count of 10 or more for analysis.
+#Load the packages.
+library(parameters)
+library(factoextra)
+#Determine the optimal number of clusters.
+plot(n_clusters(prescript1))
+# Hierarchical clustering, dendrogram.
+distmat <- dist(prescript1,method = "euclidean")
+hc <- hclust(distmat)
+plot(hc,hang=-1)
+fviz_dend(hc,k=2,rect=T)#Based on the previous analysis of the optimal number of clusters, it has been determined that the best number of clusters is 2. Therefore, set K=2.
+#The final hierarchically clustered graph created by the COOC software is included in this study.
+
+
+##co-occurrence clusters
+rm(list = ls())
+library(igraph)
+#1.读取数据
+gx_count <- readxl::read_excel("adjacency table (co-occurrence frequency of 10 or more).xlsx", 
+                               sheet = 1)   
+str(gx_count)
+#Remember to manually change "row1" in the adjacency table to "source," "row2" to "target," and "count" to "value."
+acupoint <- unique(c(gx_count$source,gx_count$target))
+edge2 <- data.frame(from = gx_count$source,to = gx_count$target,weight = gx_count$value) 
+g <- graph_from_data_frame(edge2, vertices = acupoint, directed = F)
+plot(g)
+V(g)$id <- acupoint
+
+#Generate a Pajek file.
+write_graph(g,file = "network.net", format = "pajek")
+# Create the graph using VOSview, selecting the Pajek format, specifically the network.net file.
