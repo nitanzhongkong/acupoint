@@ -100,15 +100,15 @@ for (i in 1:43) {
 }
 nrow(res)
 #Filter the combination frequency (co-occurrence frequency) as needed. Generally, a co-occurrence frequency of 1 is not meaningful.
-res <- res %>% filter(count >=10)#Set it to the desired co-occurrence frequency, which is 10 in this study.
+res <- res %>% filter(count >=9)#Set it to the desired co-occurrence frequency, which is 9 in this study.
 #Save the data, the adjacency table!!
-write.xlsx(res, "adjacency table (co-occurrence frequency of 10 or more).xlsx")
+write.xlsx(res, "adjacency table.xlsx")
 
 # Create a chord diagram.
-data = readxl::read_excel("adjacency table (co-occurrence frequency of 10 or more).xlsx", 
+data = readxl::read_excel("adjacency table.xlsx", 
                             sheet = 1)   
 write.table(data,              
-              "adjacency table (co-occurrence frequency of 10 or more).txt",     
+              "adjacency table.txt",     
               sep = ";",              
               col.names = T,           
               row.names = F,            
@@ -138,7 +138,7 @@ prescript1 <- as.data.frame(t(longdata[,-1]))
 rowname <- rownames(prescript1)
 prescript1 <- as.data.frame(lapply(prescript1,as.numeric))
 rownames(prescript1) <- rowname
-prescript1 <- prescript1[rowSums(prescript1[])>=10,]#According to the settings of this study, only extract the acupuncture points with a frequency count of 10 or more for analysis.
+prescript1 <- prescript1[rowSums(prescript1[])>=9,]#According to the settings of this study, only extract the acupuncture points with a frequency count of 9 or more for analysis.
 #Load the packages.
 library(parameters)
 library(factoextra)
@@ -156,12 +156,11 @@ fviz_dend(hc,k=2,rect=T)#Based on the previous analysis of the optimal number of
 rm(list = ls())
 library(igraph)
 #1.读取数据
-gx_count <- readxl::read_excel("adjacency table (co-occurrence frequency of 10 or more).xlsx", 
+gx_count <- readxl::read_excel("adjacency table .xlsx", 
                                sheet = 1)   
 str(gx_count)
-#Remember to manually change "row1" in the adjacency table to "source," "row2" to "target," and "count" to "value."
-acupoint <- unique(c(gx_count$source,gx_count$target))
-edge2 <- data.frame(from = gx_count$source,to = gx_count$target,weight = gx_count$value) 
+acupoint <- unique(c(gx_count$row1,gx_count$row2))
+edge2 <- data.frame(from = gx_count$row1,to = gx_count$row2,weight = gx_count$count) 
 g <- graph_from_data_frame(edge2, vertices = acupoint, directed = F)
 plot(g)
 V(g)$id <- acupoint
